@@ -13,6 +13,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@io.quarkus.runtime.annotations.RegisterForReflection
 public class BookResponseDTO {
 
     private UUID bookId;

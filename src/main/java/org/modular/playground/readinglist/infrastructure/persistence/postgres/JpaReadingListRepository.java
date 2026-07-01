@@ -60,7 +60,7 @@ public class JpaReadingListRepository implements ReadingListRepository {
     public List<ReadingList> findByUserId(UUID userId) {
         LOGGER.debugf("JPA: Finding reading list entities for user ID: %s", userId);
         TypedQuery<ReadingListEntity> query = entityManager
-                .createQuery("SELECT rl FROM ReadingListEntity rl WHERE rl.userId = :userId", ReadingListEntity.class);
+                .createQuery("SELECT DISTINCT rl FROM ReadingListEntity rl LEFT JOIN FETCH rl.items WHERE rl.userId = :userId", ReadingListEntity.class);
         query.setParameter("userId", userId);
         return query.getResultList().stream().map(mapper::toDomain).collect(Collectors.toList());
     }
@@ -132,7 +132,7 @@ public class JpaReadingListRepository implements ReadingListRepository {
     public Optional<ReadingList> findReadingListContainingBookForUser(UUID userId, UUID bookId) {
         LOGGER.debugf("JPA: Finding if user %s has book %s in a list", userId, bookId);
         TypedQuery<ReadingListEntity> query = entityManager.createQuery(
-                "SELECT rl FROM ReadingListEntity rl JOIN rl.items i WHERE rl.userId = :userId AND i.id.bookId = :bookId",
+                "SELECT DISTINCT rl FROM ReadingListEntity rl JOIN FETCH rl.items i WHERE rl.userId = :userId AND i.id.bookId = :bookId",
                 ReadingListEntity.class);
         query.setParameter("userId", userId);
         query.setParameter("bookId", bookId);

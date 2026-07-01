@@ -11,6 +11,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@io.quarkus.runtime.annotations.RegisterForReflection
 public class MoveBookRequestDTO {
     @NotNull
     private UUID sourceListId;

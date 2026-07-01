@@ -71,17 +71,13 @@ public class ReadingListServiceImpl implements ReadingListService {
         ReadingList list = readingListOpt.get();
         checkOwnership(list, principal);
 
-        return Optional.of(enrichListWithBooks(list));
+        return Optional.of(list);
     }
 
     @Override
     public List<ReadingList> getReadingListsForUser(UUID userId) {
-        LOGGER.debugf("Finding all reading lists for user ID: %s (strategy: %s)", userId, enrichmentStrategy);
-        List<ReadingList> lists = findByUserIdInTransaction(userId);
-        return switch (enrichmentStrategy) {
-            case "broken" -> enrichListsWithBooksBroken(lists);
-            default -> enrichListsWithBooks(lists);
-        };
+        LOGGER.debugf("Finding all reading lists for user ID: %s", userId);
+        return findByUserIdInTransaction(userId);
     }
 
     @Override
@@ -131,18 +127,26 @@ public class ReadingListServiceImpl implements ReadingListService {
             .orElseThrow(() -> new NotFoundException("Reading list not found with ID: " + readingListId));
         checkOwnership(readingList, principal);
 
-        List<UUID> bookIds = getBookIdsInTransaction(readingListId);
+        List<UUID> bookIds = readingList.getBooks().stream()
+            .map(Book::getBookId).collect(Collectors.toList());
         if (bookIds.isEmpty()) {
             return Collections.emptyList();
         }
-        return bookService.getBooksByIds(bookIds);
+
+        return switch (enrichmentStrategy) {
+            case "broken" -> bookIds.stream()
+                .map(id -> bookService.getBookById(id))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .collect(Collectors.toList());
+            default -> bookService.getBooksByIds(bookIds);
+        };
     }
     
     @Override
     public Optional<ReadingList> findReadingListForBookAndUser(UUID userId, UUID bookId) {
         LOGGER.debugf("Finding if user %s has book %s in any list", userId, bookId);
-        Optional<ReadingList> listOpt = findListContainingBookForUserInTransaction(userId, bookId);
-        return listOpt.map(this::enrichListWithBooks);
+        return findListContainingBookForUserInTransaction(userId, bookId);
     }
 
     @Override
