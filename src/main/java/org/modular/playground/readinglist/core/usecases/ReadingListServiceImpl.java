@@ -20,6 +20,7 @@ import org.modular.playground.user.core.usecases.UserService;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -40,6 +41,36 @@ public class ReadingListServiceImpl implements ReadingListService {
 
     @ConfigProperty(name = "app.readinglist.enrichment-strategy", defaultValue = "hexagonal")
     String enrichmentStrategy;
+
+    @Override
+    @Transactional
+    public void ensureDefaultReadingLists(User user) {
+        Set<String> existingNames = readingListRepository.findByUserId(user.getKeycloakUserId()).stream()
+                .map(ReadingList::getName)
+                .collect(Collectors.toSet());
+
+        if (!existingNames.contains("To Read")) {
+            ReadingList toReadList = ReadingListImpl.builder()
+                    .readingListId(UUID.randomUUID())
+                    .user(user)
+                    .name("To Read")
+                    .creationDate(LocalDateTime.now())
+                    .description("Books I plan to read.")
+                    .build();
+            readingListRepository.create(toReadList);
+        }
+
+        if (!existingNames.contains("Read")) {
+            ReadingList alreadyReadList = ReadingListImpl.builder()
+                    .readingListId(UUID.randomUUID())
+                    .user(user)
+                    .name("Read")
+                    .creationDate(LocalDateTime.now())
+                    .description("Books I have already completed.")
+                    .build();
+            readingListRepository.create(alreadyReadList);
+        }
+    }
 
     @Override
     public ReadingList createReadingList(ReadingListRequestDTO request, JsonWebToken principal) {

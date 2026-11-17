@@ -1,6 +1,5 @@
 package org.modular.playground.readinglist.infrastructure.messaging;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.jboss.logging.Logger;
@@ -9,8 +8,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import org.modular.playground.common.filters.TraceIdFilter;
-import org.modular.playground.readinglist.core.domain.ReadingList;
-import org.modular.playground.readinglist.core.domain.ReadingListImpl;
 import org.modular.playground.readinglist.core.usecases.ReadingListService;
 import org.modular.playground.user.core.domain.User;
 import org.modular.playground.user.core.domain.UserImpl;
@@ -40,7 +37,7 @@ public class UserProfileCreatedListener {
                     .username(eventJson.getString("username"))
                     .email(eventJson.getString("email"))
                     .build();
-            createDefaultReadingListsForUser(user);
+            readingListService.ensureDefaultReadingLists(user);
             LOGGER.infof("Created default reading lists for user %s", user.getUsername());
         } catch (Exception e) {
             LOGGER.errorf(e, "Failed to process user-profile-created event");
@@ -49,27 +46,6 @@ public class UserProfileCreatedListener {
         } finally {
             MDC.remove(TraceIdFilter.TRACE_ID_KEY);
         }
-    }
-
-    private void createDefaultReadingListsForUser(User user) {
-        ReadingList toReadList = ReadingListImpl.builder()
-                .readingListId(UUID.randomUUID())
-                .user(user)
-                .name("To Read")
-                .creationDate(LocalDateTime.now())
-                .description("Books I plan to read.")
-                .build();
-
-        ReadingList alreadyReadList = ReadingListImpl.builder()
-                .readingListId(UUID.randomUUID())
-                .user(user)
-                .name("Read")
-                .creationDate(LocalDateTime.now())
-                .description("Books I have already completed.")
-                .build();
-
-        readingListService.createReadingListInternal(toReadList);
-        readingListService.createReadingListInternal(alreadyReadList);
     }
 
     public static class UserCreatedEvent {

@@ -3,12 +3,15 @@ package org.modular.playground.readinglist.core.usecases;
 import org.modular.playground.catalog.core.domain.Book;
 import org.modular.playground.readinglist.core.domain.ReadingList;
 import org.modular.playground.readinglist.web.dto.ReadingListRequestDTO;
+import org.modular.playground.user.core.domain.User;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface ReadingListService {
+    void ensureDefaultReadingLists(User user);
+
     ReadingList createReadingListInternal(ReadingList readingList);
     
     ReadingList createReadingList(ReadingListRequestDTO request, JsonWebToken principal);
