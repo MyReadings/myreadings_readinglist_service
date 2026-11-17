@@ -44,6 +44,8 @@ public class UserProfileCreatedListener {
             LOGGER.infof("Created default reading lists for user %s", user.getUsername());
         } catch (Exception e) {
             LOGGER.errorf(e, "Failed to process user-profile-created event");
+            throw new IllegalStateException(
+                    "Failed to process user-profile-created event", e);
         } finally {
             MDC.remove(TraceIdFilter.TRACE_ID_KEY);
         }
