@@ -3,6 +3,7 @@ package org.modular.playground.readinglist.web.controllers;
 import io.quarkus.security.Authenticated;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
+import jakarta.validation.constraints.*;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -40,7 +41,7 @@ public class ReadingListController {
 
     @POST
     @RolesAllowed({ "user", "admin" })
-    public Response createReadingList(@Valid ReadingListRequestDTO readingListRequestDTO) {
+    public Response createReadingList(@NotNull @Valid ReadingListRequestDTO readingListRequestDTO) {
         LOGGER.infof("Received request to create reading list with name: %s", readingListRequestDTO.getName());
         ReadingList createdReadingList = readingListService.createReadingList(readingListRequestDTO, jwt);
         return Response.status(Response.Status.CREATED)
@@ -70,7 +71,7 @@ public class ReadingListController {
     @Path("/{readingListId}")
     @RolesAllowed({ "user", "admin" })
     public Response updateReadingList(@PathParam("readingListId") UUID readingListId,
-            @Valid ReadingListRequestDTO readingListRequestDTO) {
+            @NotNull @Valid ReadingListRequestDTO readingListRequestDTO) {
         LOGGER.infof("Received request to update reading list ID: %s", readingListId);
         ReadingList updatedList = readingListService.updateReadingList(readingListId, readingListRequestDTO, jwt);
         return Response.ok(readingListMapper.toResponseDTO(updatedList)).build();
@@ -89,7 +90,7 @@ public class ReadingListController {
     @Path("/{readingListId}/books")
     @RolesAllowed({ "user", "admin" })
     public Response addBookToReadingList(@PathParam("readingListId") UUID readingListId,
-            @Valid AddBookRequestDTO addBookRequestDTO) {
+            @NotNull @Valid AddBookRequestDTO addBookRequestDTO) {
         LOGGER.infof("Received request to add book %s to list %s", addBookRequestDTO.getBookId(), readingListId);
         readingListService.addBookToReadingList(readingListId, addBookRequestDTO.getBookId(), jwt);
         return Response.ok().entity("Book added to reading list.").build();
@@ -131,7 +132,7 @@ public class ReadingListController {
     @Consumes(MediaType.APPLICATION_JSON)
     @RolesAllowed({ "user", "admin" })
     public Response moveBookBetweenReadingLists(@PathParam("bookId") UUID bookId,
-            @Valid MoveBookRequestDTO moveRequestDTO) {
+            @NotNull @Valid MoveBookRequestDTO moveRequestDTO) {
         UUID currentUserId = UUID.fromString(jwt.getSubject());
         LOGGER.infof("Received request to move book %s from list %s to %s", bookId, moveRequestDTO.getSourceListId(),
                 moveRequestDTO.getTargetListId());
