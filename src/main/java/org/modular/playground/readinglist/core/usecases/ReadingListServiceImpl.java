@@ -1,6 +1,5 @@
 package org.modular.playground.readinglist.core.usecases;
 
-import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -22,7 +21,6 @@ import org.jboss.logging.Logger;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -203,66 +201,6 @@ public class ReadingListServiceImpl implements ReadingListService {
         if (!ownerId.equals(currentUserId) && !isAdmin) {
             throw new ForbiddenException("Reading list does not belong to the current user.");
         }
-    }
-
-    @WithSpan("readinglist.enrichListWithBooks")
-    protected ReadingList enrichListWithBooks(ReadingList list) {
-        List<UUID> bookIds = list.getBooks().stream().map(Book::getBookId).collect(Collectors.toList());
-        if (bookIds.isEmpty()) {
-            return list;
-        }
-        List<Book> fullBooks = bookService.getBooksByIds(bookIds);
-        ((ReadingListImpl) list).setBooks(fullBooks);
-        return list;
-    }
-
-    @WithSpan("readinglist.enrichListsWithBooks")
-    protected List<ReadingList> enrichListsWithBooks(List<ReadingList> lists) {
-        if (lists.isEmpty()) return Collections.emptyList();
-        
-        List<UUID> allBookIds = collectBookIds(lists);
-        if (allBookIds.isEmpty()) return lists;
-
-        Map<UUID, Book> booksMap = bookService.getBooksByIds(allBookIds).stream()
-            .collect(Collectors.toMap(Book::getBookId, Function.identity()));
-            
-        mapBooksToLists(lists, booksMap);
-        return lists;
-    }
-
-    @WithSpan("readinglist.enrichListsWithBooks.broken")
-    protected List<ReadingList> enrichListsWithBooksBroken(List<ReadingList> lists) {
-        if (lists.isEmpty()) return Collections.emptyList();
-
-        List<UUID> allBookIds = collectBookIds(lists);
-        if (allBookIds.isEmpty()) return lists;
-
-        // N+1: fetch each book individually instead of batch
-        Map<UUID, Book> booksMap = allBookIds.stream()
-            .map(id -> bookService.getBookById(id))
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .collect(Collectors.toMap(Book::getBookId, Function.identity()));
-
-        mapBooksToLists(lists, booksMap);
-        return lists;
-    }
-
-    @WithSpan("readinglist.collectBookIds")
-    protected List<UUID> collectBookIds(List<ReadingList> lists) {
-        return lists.stream()
-            .flatMap(list -> list.getBooks().stream().map(Book::getBookId))
-            .distinct().collect(Collectors.toList());
-    }
-
-    @WithSpan("readinglist.mapBooksToLists")
-    protected void mapBooksToLists(List<ReadingList> lists, Map<UUID, Book> booksMap) {
-        lists.forEach(list -> {
-            List<Book> fullBooks = list.getBooks().stream()
-                .map(bookStub -> booksMap.get(bookStub.getBookId()))
-                .filter(Objects::nonNull).collect(Collectors.toList());
-            ((ReadingListImpl) list).setBooks(fullBooks);
-        });
     }
 
     @Transactional
