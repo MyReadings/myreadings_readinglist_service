@@ -9,6 +9,7 @@ public interface ReadingListRepository {
     ReadingList create(ReadingList list);
     ReadingList update(ReadingList list);
     Optional<ReadingList> findById(UUID readingListId);
+    Optional<UUID> findOwnerIdById(UUID readingListId);
     List<ReadingList> findByUserId(UUID userId);
     void deleteById(UUID readingListId);
     void addBookToReadingList(UUID readingListId, UUID bookId);

@@ -57,6 +57,14 @@ public class JpaReadingListRepository implements ReadingListRepository {
     }
 
     @Override
+    public Optional<UUID> findOwnerIdById(UUID readingListId) {
+        return entityManager.createQuery(
+                "SELECT rl.userId FROM ReadingListEntity rl WHERE rl.id = :listId", UUID.class)
+                .setParameter("listId", readingListId)
+                .getResultList().stream().findFirst();
+    }
+
+    @Override
     public List<ReadingList> findByUserId(UUID userId) {
         LOGGER.debugf("JPA: Finding reading list entities for user ID: %s", userId);
         TypedQuery<ReadingListEntity> query = entityManager
@@ -77,27 +85,14 @@ public class JpaReadingListRepository implements ReadingListRepository {
     @Override
     public void addBookToReadingList(UUID readingListId, UUID bookId) {
         LOGGER.debugf("JPA: Adding book %s to list %s", bookId, readingListId);
-        ReadingListEntity listEntity = entityManager.find(ReadingListEntity.class, readingListId);
-        if (listEntity == null) {
-            throw new IllegalArgumentException("ReadingList with ID " + readingListId + " not found.");
-        }
-
-        String jpqlCheck = "SELECT COUNT(i) FROM ReadingListItemEntity i WHERE i.id.readingListId = :listId AND i.id.bookId = :bookId";
-        Long count = entityManager.createQuery(jpqlCheck, Long.class)
+        entityManager.createNativeQuery("""
+                INSERT INTO reading_list_items (reading_list_id, book_id)
+                VALUES (:listId, :bookId)
+                ON CONFLICT (reading_list_id, book_id) DO NOTHING
+                """)
                 .setParameter("listId", readingListId)
                 .setParameter("bookId", bookId)
-                .getSingleResult();
-
-        if (count > 0) {
-            return;
-        }
-
-        ReadingListItemEntity newItem = new ReadingListItemEntity();
-        newItem.setId(new ReadingListItemIdEntity(readingListId, bookId));
-        newItem.setReadingList(listEntity);
-
-        listEntity.getItems().add(newItem);
-        entityManager.merge(listEntity);
+                .executeUpdate();
     }
 
     @Override
@@ -116,7 +111,8 @@ public class JpaReadingListRepository implements ReadingListRepository {
                     "Book with ID " + bookId + " not found in reading list " + readingListId + ".");
         }
 
-        entityManager.remove(item);
+        // Keep the managed collection in sync; orphanRemoval deletes the row.
+        listEntity.getItems().removeIf(existing -> id.equals(existing.getId()));
     }
 
     @Override

@@ -133,9 +133,9 @@ public class ReadingListServiceImpl implements ReadingListService {
     @Override
     public void addBookToReadingList(UUID readingListId, UUID bookId, JsonWebToken principal) {
         LOGGER.infof("User %s adding book %s to list %s", principal.getSubject(), bookId, readingListId);
-        ReadingList readingList = findByIdInTransaction(readingListId)
+        UUID ownerId = findOwnerIdInTransaction(readingListId)
             .orElseThrow(() -> new NotFoundException("Reading list not found with ID: " + readingListId));
-        checkOwnership(readingList, principal);
+        checkOwnership(ownerId, principal);
         if (bookService.getBookById(bookId).isEmpty()) {
             throw new NotFoundException("Book not found with ID: " + bookId);
         }
@@ -194,9 +194,13 @@ public class ReadingListServiceImpl implements ReadingListService {
     }
     
     private void checkOwnership(ReadingList readingList, JsonWebToken principal) {
+        checkOwnership(readingList.getUser().getKeycloakUserId(), principal);
+    }
+
+    private void checkOwnership(UUID ownerId, JsonWebToken principal) {
         UUID currentUserId = UUID.fromString(principal.getSubject());
         boolean isAdmin = SecurityUtils.isAdmin(principal);
-        if (!readingList.getUser().getKeycloakUserId().equals(currentUserId) && !isAdmin) {
+        if (!ownerId.equals(currentUserId) && !isAdmin) {
             throw new ForbiddenException("Reading list does not belong to the current user.");
         }
     }
@@ -284,6 +288,11 @@ public class ReadingListServiceImpl implements ReadingListService {
     @Transactional
     protected void deleteByIdInTransaction(UUID readingListId) {
         readingListRepository.deleteById(readingListId);
+    }
+
+    @Transactional
+    protected Optional<UUID> findOwnerIdInTransaction(UUID readingListId) {
+        return readingListRepository.findOwnerIdById(readingListId);
     }
 
     @Transactional
