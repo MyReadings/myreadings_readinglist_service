@@ -27,6 +27,27 @@ class UserProfileCreatedListenerTest {
     UserProfileCreatedListener listener;
 
     @Test
+    void keepsEventCorrelationSeparateFromTraceContext() {
+        MDC.put(TraceIdFilter.TRACE_ID_KEY, "active-trace");
+        MDC.put(TraceIdFilter.SPAN_ID_KEY, "active-span");
+        doAnswer(invocation -> {
+            assertEquals("active-trace", MDC.get(TraceIdFilter.TRACE_ID_KEY));
+            assertEquals("active-span", MDC.get(TraceIdFilter.SPAN_ID_KEY));
+            assertNotNull(MDC.get(TraceIdFilter.EVENT_ID_KEY));
+            return null;
+        }).when(service).ensureDefaultReadingLists(any(User.class));
+        try {
+            listener.processUserCreation(new JsonObject()
+                    .put("keycloakUserId", UUID.randomUUID().toString()));
+            assertEquals("active-trace", MDC.get(TraceIdFilter.TRACE_ID_KEY));
+            assertEquals("active-span", MDC.get(TraceIdFilter.SPAN_ID_KEY));
+            assertNull(MDC.get(TraceIdFilter.EVENT_ID_KEY));
+        } finally {
+            MDC.clear();
+        }
+    }
+
+    @Test
     void delegatesDefaultCreationAsOneServiceOperation() {
         var userId = UUID.randomUUID();
         var event = new JsonObject()

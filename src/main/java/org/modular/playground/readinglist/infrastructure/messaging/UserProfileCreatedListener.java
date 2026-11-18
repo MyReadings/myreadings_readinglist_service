@@ -26,7 +26,7 @@ public class UserProfileCreatedListener {
     @Incoming("user-profile-created")
     @Blocking
     public void processUserCreation(JsonObject eventJson) {
-        MDC.put(TraceIdFilter.TRACE_ID_KEY, "event-" + UUID.randomUUID().toString());
+        MDC.put(TraceIdFilter.EVENT_ID_KEY, "event-" + UUID.randomUUID().toString());
         LOGGER.infof("Received user-profile-created event: %s", eventJson.encode());
 
         try {
@@ -44,7 +44,7 @@ public class UserProfileCreatedListener {
             throw new IllegalStateException(
                     "Failed to process user-profile-created event", e);
         } finally {
-            MDC.remove(TraceIdFilter.TRACE_ID_KEY);
+            MDC.remove(TraceIdFilter.EVENT_ID_KEY);
         }
     }
 
