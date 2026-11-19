@@ -35,7 +35,7 @@ public class JpaAddBookIntegrationTest {
                     Map.entry("quarkus.http.test-port", "0"),
                     Map.entry("mp.messaging.incoming.user-profile-created.enabled", "false"),
                     Map.entry("quarkus.datasource.\"readinglist-db\".username", "postgres"),
-                    Map.entry("quarkus.datasource.\"readinglist-db\".password", "f12-test-only"),
+                    Map.entry("quarkus.datasource.\"readinglist-db\".password", System.getenv().getOrDefault("DEMO_TEST_DB_PASSWORD", "f12-test-only")),
                     Map.entry("quarkus.datasource.\"readinglist-db\".jdbc.url",
                             System.getenv().getOrDefault("F12_TEST_DB_URL", "jdbc:postgresql://localhost:1/f12_test")),
                     Map.entry("quarkus.hibernate-orm.\"readinglist-db\".database.generation", "drop-and-create"));
@@ -154,6 +154,39 @@ public class JpaAddBookIntegrationTest {
             repository.addBookToReadingList(UUID.randomUUID(), UUID.randomUUID());
         }));
         assertEquals(0L, itemCount());
+    }
+
+    @Test
+    void listAndBookPagesAreBoundedWithoutHydratingCollections() {
+        QuarkusTransaction.requiringNew().run(() -> {
+            for (int i = 0; i < 5; i++) {
+                repository.addBookToReadingList(listId, UUID.randomUUID());
+                var list = new ReadingListEntity();
+                list.setUserId(ownerId);
+                list.setName("List " + i);
+                list.setCreationDate(LocalDateTime.now());
+                entityManager.persist(list);
+            }
+        });
+        QuarkusTransaction.requiringNew().run(() -> {
+            var stats = entityManager.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
+            stats.setStatisticsEnabled(true);
+            stats.clear();
+            try {
+                var page = repository.findPageByUserId(ownerId, 0, 2);
+                assertEquals(2, page.size());
+                assertTrue(page.stream().allMatch(list -> list.getBooks().isEmpty()));
+                assertTrue(repository.findSummaryById(listId).orElseThrow().getBooks().isEmpty());
+                var next = repository.findPageByUserId(ownerId, 2, 2);
+                assertTrue(next.stream().noneMatch(list -> page.stream().anyMatch(p -> p.getReadingListId().equals(list.getReadingListId()))));
+                var first = repository.getBookIdsPage(listId, 0, 3);
+                var last = repository.getBookIdsPage(listId, 3, 3);
+                assertEquals(3, first.size());
+                assertEquals(2, last.size());
+                assertTrue(last.stream().noneMatch(first::contains));
+                assertEquals(0L, stats.getCollectionFetchCount());
+            } finally { stats.setStatisticsEnabled(false); }
+        });
     }
 
     private long itemCount() {

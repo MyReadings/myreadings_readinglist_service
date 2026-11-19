@@ -33,8 +33,8 @@ class BookEnrichmentStrategyTest {
     void ownedList() {
         var owner = UUID.randomUUID();
         when(principal.getSubject()).thenReturn(owner.toString());
-        when(repository.findById(listId)).thenReturn(Optional.of(ReadingListImpl.builder()
-            .readingListId(listId).user(UserImpl.builder().keycloakUserId(owner).build()).books(contents).build()));
+        when(repository.findOwnerIdById(listId)).thenReturn(Optional.of(owner));
+        when(repository.getBookIdsPage(listId, 0, 101)).thenReturn(contents.stream().map(Book::getBookId).toList());
     }
 
     @Test
@@ -42,7 +42,7 @@ class BookEnrichmentStrategyTest {
         service.enrichmentStrategy = "hexagonal";
         var ids = contents.stream().map(Book::getBookId).toList();
         when(books.getBooksByIds(ids)).thenReturn(contents);
-        assertEquals(contents, service.getBooksInReadingList(listId, principal));
+        assertEquals(contents, service.getBooksInReadingList(listId, 0, 100, principal).content());
         verify(books).getBooksByIds(ids);
         verify(books, never()).getBookById(any());
     }
@@ -51,8 +51,20 @@ class BookEnrichmentStrategyTest {
     void brokenStrategyMakesOneCallPerBookWithoutBatching() {
         service.enrichmentStrategy = "broken";
         contents.forEach(book -> when(books.getBookById(book.getBookId())).thenReturn(Optional.of(book)));
-        assertEquals(contents, service.getBooksInReadingList(listId, principal));
+        assertEquals(contents, service.getBooksInReadingList(listId, 0, 100, principal).content());
         verify(books, times(contents.size())).getBookById(any());
         verify(books, never()).getBooksByIds(any());
+    }    @Test
+    void lookaheadIsNotFetchedAndDeletedBooksDoNotHideFollowingPages() {
+        service.enrichmentStrategy = "hexagonal";
+        var ids = java.util.stream.IntStream.range(0, 101).mapToObj(i -> UUID.randomUUID()).toList();
+        when(repository.getBookIdsPage(listId, 0, 101)).thenReturn(ids);
+        when(books.getBooksByIds(ids.subList(0, 100))).thenReturn(List.of());
+        var page = service.getBooksInReadingList(listId, 0, 100, principal);
+        assertTrue(page.hasMore());
+        assertTrue(page.content().isEmpty());
+        verify(books).getBooksByIds(ids.subList(0, 100));
+        verify(repository, never()).findById(any());
     }
+
 }

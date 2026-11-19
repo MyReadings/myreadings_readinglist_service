@@ -10,6 +10,7 @@ import org.modular.playground.catalog.core.domain.Book;
 import org.modular.playground.catalog.core.usecases.BookService;
 import org.modular.playground.common.security.SecurityUtils;
 import org.modular.playground.readinglist.core.domain.ReadingList;
+import org.modular.playground.readinglist.core.domain.PageResult;
 import org.modular.playground.readinglist.core.domain.ReadingListImpl;
 import org.modular.playground.readinglist.core.usecases.repositories.ReadingListRepository;
 import org.modular.playground.readinglist.infrastructure.persistence.postgres.mapper.ReadingListMapper;
@@ -91,7 +92,7 @@ public class ReadingListServiceImpl implements ReadingListService {
     public Optional<ReadingList> findReadingListById(UUID readingListId, JsonWebToken principal) {
         LOGGER.debugf("Finding reading list %s for user %s", readingListId, principal.getSubject());
         
-        Optional<ReadingList> readingListOpt = findByIdInTransaction(readingListId);
+        Optional<ReadingList> readingListOpt = findSummaryInTransaction(readingListId);
         
         if (readingListOpt.isEmpty()) {
             return Optional.empty();
@@ -104,9 +105,9 @@ public class ReadingListServiceImpl implements ReadingListService {
     }
 
     @Override
-    public List<ReadingList> getReadingListsForUser(UUID userId) {
+    public PageResult<ReadingList> getReadingListsForUser(UUID userId, int page, int size) {
         LOGGER.debugf("Finding all reading lists for user ID: %s", userId);
-        return findByUserIdInTransaction(userId);
+        return PageResult.from(findPageByUserInTransaction(userId, page * size, size + 1), size);
     }
 
     @Override
@@ -150,26 +151,19 @@ public class ReadingListServiceImpl implements ReadingListService {
     }
 
     @Override
-    public List<Book> getBooksInReadingList(UUID readingListId, JsonWebToken principal) {
+    public PageResult<Book> getBooksInReadingList(UUID readingListId, int page, int size, JsonWebToken principal) {
         LOGGER.debugf("User %s getting books from list %s", principal.getSubject(), readingListId);
-        ReadingList readingList = findByIdInTransaction(readingListId)
+        UUID owner = findOwnerIdInTransaction(readingListId)
             .orElseThrow(() -> new NotFoundException("Reading list not found with ID: " + readingListId));
-        checkOwnership(readingList, principal);
-
-        List<UUID> bookIds = readingList.getBooks().stream()
-            .map(Book::getBookId).collect(Collectors.toList());
-        if (bookIds.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return switch (enrichmentStrategy) {
-            case "broken" -> bookIds.stream()
-                .map(id -> bookService.getBookById(id))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.toList());
-            default -> bookService.getBooksByIds(bookIds);
+        checkOwnership(owner, principal);
+        var ids = PageResult.from(getBookIdsPageInTransaction(readingListId, page * size, size + 1), size);
+        if (ids.content().isEmpty()) return new PageResult<>(Collections.emptyList(), ids.hasMore());
+        List<Book> books = switch (enrichmentStrategy) {
+            case "broken" -> ids.content().stream()
+                .map(bookService::getBookById).flatMap(Optional::stream).toList();
+            default -> bookService.getBooksByIds(ids.content());
         };
+        return new PageResult<>(books, ids.hasMore());
     }
     
     @Override
@@ -201,6 +195,21 @@ public class ReadingListServiceImpl implements ReadingListService {
         if (!ownerId.equals(currentUserId) && !isAdmin) {
             throw new ForbiddenException("Reading list does not belong to the current user.");
         }
+    }
+
+    @Transactional
+    protected Optional<ReadingList> findSummaryInTransaction(UUID id) {
+        return readingListRepository.findSummaryById(id);
+    }
+
+    @Transactional
+    protected List<ReadingList> findPageByUserInTransaction(UUID userId, int offset, int limit) {
+        return readingListRepository.findPageByUserId(userId, offset, limit);
+    }
+
+    @Transactional
+    protected List<UUID> getBookIdsPageInTransaction(UUID listId, int offset, int limit) {
+        return readingListRepository.getBookIdsPage(listId, offset, limit);
     }
 
     @Transactional

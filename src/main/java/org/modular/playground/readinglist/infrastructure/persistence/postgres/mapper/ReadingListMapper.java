@@ -37,6 +37,11 @@ public interface ReadingListMapper {
     @Mapping(source = "items", target = "books", qualifiedByName = "mapItemsToBookStubs")
     ReadingListImpl toDomain(ReadingListEntity entity);
 
+    @Mapping(source = "id", target = "readingListId")
+    @Mapping(source = "userId", target = "user", qualifiedByName = "mapUserIdToUserStub")
+    @Mapping(target = "books", ignore = true)
+    ReadingListImpl toSummaryDomain(ReadingListEntity entity);
+
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true) 
     @Mapping(source = "user.keycloakUserId", target = "userId")

@@ -11,6 +11,9 @@ public interface ReadingListRepository {
     Optional<ReadingList> findById(UUID readingListId);
     Optional<UUID> findOwnerIdById(UUID readingListId);
     List<ReadingList> findByUserId(UUID userId);
+    List<ReadingList> findPageByUserId(UUID userId, int offset, int limit);
+    Optional<ReadingList> findSummaryById(UUID readingListId);
+    List<UUID> getBookIdsPage(UUID readingListId, int offset, int limit);
     void deleteById(UUID readingListId);
     void addBookToReadingList(UUID readingListId, UUID bookId);
     void removeBookFromReadingList(UUID readingListId, UUID bookId);

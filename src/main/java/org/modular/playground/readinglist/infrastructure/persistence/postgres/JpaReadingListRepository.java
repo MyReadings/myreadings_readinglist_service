@@ -68,9 +68,28 @@ public class JpaReadingListRepository implements ReadingListRepository {
     public List<ReadingList> findByUserId(UUID userId) {
         LOGGER.debugf("JPA: Finding reading list entities for user ID: %s", userId);
         TypedQuery<ReadingListEntity> query = entityManager
-                .createQuery("SELECT DISTINCT rl FROM ReadingListEntity rl LEFT JOIN FETCH rl.items WHERE rl.userId = :userId", ReadingListEntity.class);
+                .createQuery("SELECT rl FROM ReadingListEntity rl WHERE rl.userId = :userId", ReadingListEntity.class);
         query.setParameter("userId", userId);
-        return query.getResultList().stream().map(mapper::toDomain).collect(Collectors.toList());
+        return query.getResultList().stream().map(mapper::toSummaryDomain).collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<ReadingList> findSummaryById(UUID id) {
+        return Optional.ofNullable(entityManager.find(ReadingListEntity.class, id)).map(mapper::toSummaryDomain);
+    }
+
+    @Override
+    public List<ReadingList> findPageByUserId(UUID userId, int offset, int limit) {
+        // Never paginate a collection fetch join: Hibernate can paginate it in memory.
+        return entityManager.createQuery("SELECT rl FROM ReadingListEntity rl WHERE rl.userId = :userId ORDER BY rl.creationDate, rl.id", ReadingListEntity.class)
+                .setParameter("userId", userId).setFirstResult(offset).setMaxResults(limit)
+                .getResultList().stream().<ReadingList>map(mapper::toSummaryDomain).toList();
+    }
+
+    @Override
+    public List<UUID> getBookIdsPage(UUID listId, int offset, int limit) {
+        return entityManager.createQuery("SELECT i.id.bookId FROM ReadingListItemEntity i WHERE i.id.readingListId = :listId ORDER BY i.id.bookId", UUID.class)
+                .setParameter("listId", listId).setFirstResult(offset).setMaxResults(limit).getResultList();
     }
 
     @Override
@@ -128,10 +147,10 @@ public class JpaReadingListRepository implements ReadingListRepository {
     public Optional<ReadingList> findReadingListContainingBookForUser(UUID userId, UUID bookId) {
         LOGGER.debugf("JPA: Finding if user %s has book %s in a list", userId, bookId);
         TypedQuery<ReadingListEntity> query = entityManager.createQuery(
-                "SELECT DISTINCT rl FROM ReadingListEntity rl JOIN FETCH rl.items i WHERE rl.userId = :userId AND i.id.bookId = :bookId",
+                "SELECT rl FROM ReadingListEntity rl JOIN rl.items i WHERE rl.userId = :userId AND i.id.bookId = :bookId ORDER BY rl.id",
                 ReadingListEntity.class);
         query.setParameter("userId", userId);
         query.setParameter("bookId", bookId);
-        return query.getResultStream().findFirst().map(mapper::toDomain);
+        return query.setMaxResults(1).getResultStream().findFirst().map(mapper::toSummaryDomain);
     }
 }

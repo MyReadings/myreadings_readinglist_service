@@ -13,6 +13,7 @@ import org.modular.playground.readinglist.core.domain.ReadingList;
 import org.modular.playground.readinglist.core.usecases.ReadingListService;
 import org.modular.playground.readinglist.infrastructure.persistence.postgres.mapper.ReadingListMapper;
 import org.modular.playground.readinglist.web.dto.AddBookRequestDTO;
+import org.modular.playground.readinglist.web.dto.ReadingListSummaryDTO;
 import org.modular.playground.readinglist.web.dto.MoveBookRequestDTO;
 import org.modular.playground.readinglist.web.dto.ReadingListRequestDTO;
 import org.eclipse.microprofile.jwt.JsonWebToken;
@@ -45,7 +46,7 @@ public class ReadingListController {
         LOGGER.infof("Received request to create reading list with name: %s", readingListRequestDTO.getName());
         ReadingList createdReadingList = readingListService.createReadingList(readingListRequestDTO, jwt);
         return Response.status(Response.Status.CREATED)
-                .entity(readingListMapper.toResponseDTO(createdReadingList)).build();
+                .entity(ReadingListSummaryDTO.from(createdReadingList)).build();
     }
 
     @GET
@@ -54,17 +55,19 @@ public class ReadingListController {
     public Response getReadingListById(@PathParam("readingListId") UUID readingListId) {
         LOGGER.infof("Received request to get reading list by ID: %s", readingListId);
         Optional<ReadingList> readingList = readingListService.findReadingListById(readingListId, jwt);
-        return readingList.map(rl -> Response.ok(readingListMapper.toResponseDTO(rl)).build())
+        return readingList.map(rl -> Response.ok(ReadingListSummaryDTO.from(rl)).build())
                 .orElse(Response.status(Response.Status.NOT_FOUND).build());
     }
 
     @GET
     @RolesAllowed({ "user", "admin" })
-    public Response getAllReadingListsForUser() {
+    public Response getAllReadingListsForUser(@DefaultValue("0") @Min(0) @Max(1000000) @QueryParam("page") int page,
+            @DefaultValue("100") @Min(1) @Max(100) @QueryParam("size") int size) {
         UUID currentUserId = UUID.fromString(jwt.getSubject());
         LOGGER.infof("Received request to get all reading lists for user: %s", currentUserId);
-        List<ReadingList> readingLists = readingListService.getReadingListsForUser(currentUserId);
-        return Response.ok(readingListMapper.toResponseDTOs(readingLists)).build();
+        var result = readingListService.getReadingListsForUser(currentUserId, page, size);
+        return Response.ok(result.content().stream().map(ReadingListSummaryDTO::from).toList())
+                .header("X-Has-More", result.hasMore()).build();
     }
 
     @PUT
@@ -74,7 +77,7 @@ public class ReadingListController {
             @NotNull @Valid ReadingListRequestDTO readingListRequestDTO) {
         LOGGER.infof("Received request to update reading list ID: %s", readingListId);
         ReadingList updatedList = readingListService.updateReadingList(readingListId, readingListRequestDTO, jwt);
-        return Response.ok(readingListMapper.toResponseDTO(updatedList)).build();
+        return Response.ok(ReadingListSummaryDTO.from(updatedList)).build();
     }
 
     @DELETE
@@ -109,10 +112,11 @@ public class ReadingListController {
     @GET
     @Path("/{readingListId}/books")
     @RolesAllowed({ "user", "admin" })
-    public Response getBooksInReadingList(@PathParam("readingListId") UUID readingListId) {
+    public Response getBooksInReadingList(@PathParam("readingListId") UUID readingListId, @DefaultValue("0") @Min(0) @Max(1000000) @QueryParam("page") int page,
+            @DefaultValue("100") @Min(1) @Max(100) @QueryParam("size") int size) {
         LOGGER.infof("Received request to get books in list %s", readingListId);
-        List<Book> books = readingListService.getBooksInReadingList(readingListId, jwt);
-        return Response.ok(books).build();
+        var result = readingListService.getBooksInReadingList(readingListId, page, size, jwt);
+        return Response.ok(result.content()).header("X-Has-More", result.hasMore()).build();
     }
 
     @GET
@@ -123,7 +127,7 @@ public class ReadingListController {
         LOGGER.infof("Received request to check if user %s has book %s in a list", currentUserId, bookId);
         Optional<ReadingList> readingListOptional = readingListService.findReadingListForBookAndUser(currentUserId,
                 bookId);
-        return readingListOptional.map(rl -> Response.ok(readingListMapper.toResponseDTO(rl)).build())
+        return readingListOptional.map(rl -> Response.ok(ReadingListSummaryDTO.from(rl)).build())
                 .orElse(Response.status(Response.Status.NOT_FOUND).build());
     }
 
